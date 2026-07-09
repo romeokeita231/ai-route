@@ -1,14 +1,14 @@
 package router
 
 import (
-	"strconv"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-contrib/sessions"
-	docs "github.com/romeokeita231/ai-router/docs"
 	redisStore "github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
+	docs "github.com/romeokeita231/ai-router/docs"
 
 	"github.com/romeokeita231/ai-router/internal/config"
 	"github.com/romeokeita231/ai-router/internal/controller"
@@ -23,6 +23,10 @@ func New(
 	cfg *config.Config,
 	healthController *controller.HealthController,
 	userController *controller.UserController,
+	apiKeyController *controller.ApiKeyController,
+	statsController *controller.StatsController,
+	internalChatController *controller.InternalChatController,
+	chatController *controller.ChatController,
 	userService *service.UserService,
 ) (*gin.Engine, error) {
 	engine := gin.New()
@@ -65,6 +69,28 @@ func New(
 
 		userGroup.POST("/add", middleware.RequireAdmin(userService), userController.AddUser)
 		userGroup.POST("/delete", middleware.RequireAdmin(userService), userController.DeleteUser)
+
+		// API Key 管理（需要登录）
+		apiKeyGroup := apiGroup.Group("/api/key")
+		apiKeyGroup.Use(middleware.RequireLogin(userService))
+		apiKeyGroup.POST("/create", apiKeyController.CreateApiKey)
+		apiKeyGroup.GET("/list/my", apiKeyController.ListMyApiKeys)
+		apiKeyGroup.POST("/revoke", apiKeyController.RevokeApiKey)
+
+		// 统计接口（需要登录）
+		statsGroup := apiGroup.Group("/stats")
+		statsGroup.Use(middleware.RequireLogin(userService))
+		statsGroup.GET("/my/tokens", statsController.GetMyTokenStats)
+		statsGroup.GET("/my/logs", statsController.GetMyLogs)
+
+		// 内部对话接口（需要登录）
+		internalChatGroup := apiGroup.Group("/internal/chat")
+		internalChatGroup.Use(middleware.RequireLogin(userService))
+		internalChatGroup.POST("/completions", internalChatController.ChatCompletions)
+
+		// 外部对话接口（通过 API Key 认证，不需要 Session）
+		chatGroup := apiGroup.Group("/v1/chat")
+		chatGroup.POST("/completions", chatController.ChatCompletions)
 
 	}
 
