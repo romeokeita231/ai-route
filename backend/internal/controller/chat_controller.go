@@ -45,12 +45,15 @@ func (c *ChatController) ChatCompletions(ctx *gin.Context) {
         return
     }
 
+    clientIP := ctx.ClientIP()
+	userAgent := ctx.GetHeader("User-Agent")
+
     // 判断是否为流式请求
     if request.Stream != nil && *request.Stream {
         c.stream(ctx, request, apiKey.UserID, apiKey.ID)
         return
     }
-    response, err := c.chatService.Chat(request, apiKey.UserID, apiKey.ID, apiKeyValue, apiKeyValue)
+    response, err := c.chatService.Chat(request, apiKey.UserID, apiKey.ID, clientIP,userAgent)
     if err != nil {
         writeServiceError(ctx, err)
         return

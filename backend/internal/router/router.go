@@ -28,6 +28,8 @@ func New(
 	internalChatController *controller.InternalChatController,
 	chatController *controller.ChatController,
 	userService *service.UserService,
+	providerController *controller.ProviderController,
+	modelController *controller.ModelController,
 ) (*gin.Engine, error) {
 	engine := gin.New()
 	engine.Use(gin.Logger())
@@ -91,6 +93,26 @@ func New(
 		// 外部对话接口（通过 API Key 认证，不需要 Session）
 		chatGroup := apiGroup.Group("/v1/chat")
 		chatGroup.POST("/completions", chatController.ChatCompletions)
+
+		providerGroup := apiGroup.Group("/provider")
+		providerGroup.POST("/add", middleware.RequireAdmin(userService), providerController.AddProvider)
+		providerGroup.POST("/delete", middleware.RequireAdmin(userService), providerController.DeleteProvider)
+		providerGroup.POST("/update", middleware.RequireAdmin(userService), providerController.UpdateProvider)
+		providerGroup.GET("/get/vo", providerController.GetProviderVOByID)
+		providerGroup.POST("/list/page/vo", providerController.ListProviderVOByPage)
+		providerGroup.GET("/list/vo", providerController.ListProviderVO)
+		providerGroup.GET("/list/healthy", providerController.ListHealthyProviders)
+
+		modelGroup := apiGroup.Group("/model")
+		modelGroup.POST("/add", middleware.RequireAdmin(userService), modelController.AddModel)
+		modelGroup.POST("/delete", middleware.RequireAdmin(userService), modelController.DeleteModel)
+		modelGroup.POST("/update", middleware.RequireAdmin(userService), modelController.UpdateModel)
+		modelGroup.GET("/get/vo", modelController.GetModelVOByID)
+		modelGroup.POST("/list/page/vo", modelController.ListModelVOByPage)
+		modelGroup.GET("/list/vo", modelController.ListModelVO)
+		modelGroup.GET("/list/active", modelController.ListActiveModels)
+		modelGroup.GET("/list/active/provider/:providerId", modelController.ListActiveModelsByProvider)
+		modelGroup.GET("/list/active/type/:modelType", modelController.ListActiveModelsByType)
 
 	}
 

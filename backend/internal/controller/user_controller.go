@@ -162,3 +162,10 @@ func (u *UserController) handleBindError(c *gin.Context, action string, err erro
 	common.Error(c, errno.ParamsError.Code, errno.ParamsError.Message)
 }
 
+func parsePositiveID(raw string) (int64, error) {
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, errno.New(errno.ParamsError)
+	}
+	return id, nil
+}
