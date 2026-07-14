@@ -5,6 +5,16 @@ declare namespace API {
     message?: string
   }
 
+  type blacklistRequest = {
+    ip?: string
+    reason?: string
+  }
+
+  type checkBlacklistParams = {
+    /** IP */
+    ip: string
+  }
+
   type DeleteRequest = {
     id?: number
   }

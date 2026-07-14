@@ -2,12 +2,36 @@ package service
 
 import (
     "log"
+	"time"
+	
     "github.com/romeokeita231/ai-router/internal/repository"
     "github.com/romeokeita231/ai-router/internal/model/entity"
     "github.com/romeokeita231/ai-router/internal/errno"
 )
 
 const defaultLogLimit = 100
+
+type RequestLogInput struct {
+	TraceID          string
+	UserID           *int64
+	APIKeyID         *int64
+	ModelID          *int64
+	RequestModel     string
+	ModelName        string
+	RequestType      string
+	Source           string
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
+	Duration         int
+	Status           string
+	ErrorMessage     string
+	ErrorCode        string
+	RoutingStrategy  string
+	IsFallback       bool
+	ClientIP         string
+	UserAgent        string
+}
 
 type RequestLogService struct {
 	requestLogRepo *repository.RequestLogRepository
@@ -21,45 +45,63 @@ func NewRequestLogService(requestLogRepo *repository.RequestLogRepository, apiKe
 	}
 }
 
-func (s *RequestLogService) LogRequestAsync(
-    userID *int64, apiKeyID *int64, modelName string,
-    promptTokens, completionTokens, totalTokens, duration int,
-    status, errorMessage string,
-) {
-    go func() {
-        if err := s.logRequest(userID, apiKeyID, modelName,
-            promptTokens, completionTokens, totalTokens,
-            duration, status, errorMessage); err != nil {
-            log.Printf("log request failed: %v", err)
-        }
-    }()
+func (s *RequestLogService) LogRequestAsync(input RequestLogInput) {
+	go func() {
+		if err := s.logRequest(input); err != nil {
+			log.Printf("log request failed: %v", err)
+		}
+	}()
 }
 
-func (s *RequestLogService) logRequest(
-	userID *int64,
-	apiKeyID *int64,
-	modelName string,
-	promptTokens int,
-	completionTokens int,
-	totalTokens int,
-	duration int,
-	status string,
-	errorMessage string,
-) error {
-    record := &entity.RequestLog{
-        UserID: userID, APIKeyID: apiKeyID, ModelName: modelName,
-        PromptTokens: promptTokens, CompletionTokens: completionTokens,
-        TotalTokens: totalTokens, Duration: duration,
-        Status: status, ErrorMessage: errorMessage,
-    }
-    if err := s.requestLogRepo.Create(record); err != nil {
-        return err
-    }
-    // 成功的请求更新 API Key 使用统计
-    if status == "success" && apiKeyID != nil && totalTokens > 0 {
-        s.apiKeyService.UpdateUsageStats(*apiKeyID, totalTokens)
-    }
-    return nil
+func (s *RequestLogService) logRequest(input RequestLogInput) error {
+	isFallback := 0
+	if input.IsFallback {
+		isFallback = 1
+	}
+	requestType := input.RequestType
+	if requestType == "" {
+		requestType = "chat"
+	}
+	source := input.Source
+	if source == "" {
+		source = "web"
+	}
+	modelName := input.ModelName
+	if modelName == "" {
+		modelName = input.RequestModel
+	}
+
+	record := &entity.RequestLog{
+		TraceID:          input.TraceID,
+		UserID:           input.UserID,
+		APIKeyID:         input.APIKeyID,
+		ModelID:          input.ModelID,
+		RequestModel:     input.RequestModel,
+		ModelName:        modelName,
+		RequestType:      requestType,
+		Source:           source,
+		PromptTokens:     input.PromptTokens,
+		CompletionTokens: input.CompletionTokens,
+		TotalTokens:      input.TotalTokens,
+		Duration:         input.Duration,
+		Status:           input.Status,
+		ErrorMessage:     input.ErrorMessage,
+		ErrorCode:        input.ErrorCode,
+		RoutingStrategy:  input.RoutingStrategy,
+		IsFallback:       isFallback,
+		ClientIP:         input.ClientIP,
+		UserAgent:        input.UserAgent,
+		CreateTime:       time.Now(),
+		UpdateTime:       time.Now(),
+	}
+	if err := s.requestLogRepo.Create(record); err != nil {
+		return err
+	}
+
+	if input.Status == "success" && input.APIKeyID != nil && input.TotalTokens > 0 {
+		s.apiKeyService.UpdateUsageStats(*input.APIKeyID, input.TotalTokens)
+	}
+	return nil
 }
 
 func (s *RequestLogService) ListUserLogs(userID int64, limit int) ([]entity.RequestLog, error) {

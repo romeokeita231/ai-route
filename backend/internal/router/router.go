@@ -2,6 +2,7 @@ package router
 
 import (
 	"fmt"
+	"time"
 	"net/http"
 	"strconv"
 
@@ -19,6 +20,12 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
+const sessionPoolSize = 10
+const (
+	apiChatRateLimitPerSecond      = 60
+	internalChatRateLimitPerSecond = 30
+)
+
 func New(
 	cfg *config.Config,
 	healthController *controller.HealthController,
@@ -30,15 +37,19 @@ func New(
 	userService *service.UserService,
 	providerController *controller.ProviderController,
 	modelController *controller.ModelController,
+	blacklistController *controller.BlacklistController,
+	blacklistService *service.BlacklistService,
+	rateLimitService *service.RateLimitService,
 ) (*gin.Engine, error) {
 	engine := gin.New()
+	engine.Use(middleware.IPBlacklistFilter(blacklistService))
 	engine.Use(gin.Logger())
 	engine.Use(middleware.Recovery())
 	engine.Use(middleware.CORS())
 
 	// 配置 Redis Session
 	store, err := redisStore.NewStoreWithDB(
-		10, "tcp",
+		sessionPoolSize, "tcp",
 		cfg.RedisAddr, cfg.RedisUsername, cfg.RedisPassword,
 		strconv.Itoa(cfg.RedisDB),
 		[]byte(cfg.SessionSecret),
@@ -88,10 +99,12 @@ func New(
 		// 内部对话接口（需要登录）
 		internalChatGroup := apiGroup.Group("/internal/chat")
 		internalChatGroup.Use(middleware.RequireLogin(userService))
+		internalChatGroup.Use(middleware.RateLimit(rateLimitService, middleware.RateLimitTypeIP, internalChatRateLimitPerSecond, time.Second))
 		internalChatGroup.POST("/completions", internalChatController.ChatCompletions)
 
 		// 外部对话接口（通过 API Key 认证，不需要 Session）
 		chatGroup := apiGroup.Group("/v1/chat")
+		chatGroup.Use(middleware.RateLimit(rateLimitService, middleware.RateLimitTypeAPIKey, apiChatRateLimitPerSecond, time.Second))
 		chatGroup.POST("/completions", chatController.ChatCompletions)
 
 		providerGroup := apiGroup.Group("/provider")
@@ -114,6 +127,13 @@ func New(
 		modelGroup.GET("/list/active/provider/:providerId", modelController.ListActiveModelsByProvider)
 		modelGroup.GET("/list/active/type/:modelType", modelController.ListActiveModelsByType)
 
+		blacklistGroup := apiGroup.Group("/admin/blacklist")
+		blacklistGroup.Use(middleware.RequireAdmin(userService))
+		blacklistGroup.GET("/list", blacklistController.List)
+		blacklistGroup.POST("/add", blacklistController.Add)
+		blacklistGroup.POST("/remove", blacklistController.Remove)
+		blacklistGroup.GET("/check", blacklistController.Check)
+		blacklistGroup.GET("/count", blacklistController.Count)
 	}
 
 	return engine, nil

@@ -5,8 +5,8 @@
 package main
 
 import (
-	"log"
 	"context"
+	"log"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -51,7 +51,10 @@ func main() {
 	requestLogRepo := repository.NewRequestLogRepository(db)
 	providerRepo := repository.NewProviderRepository(db)
 	modelRepo := repository.NewModelRepository(db)
-	
+
+	redisPool := service.NewRedisPool(cfg)
+	defer redisPool.Close()
+
 	// Service 层
 	userService := service.NewUserService(userRepo)
 	apiKeyService := service.NewApiKeyService(apiKeyRepo)
@@ -59,6 +62,8 @@ func main() {
 	providerService := service.NewProviderService(providerRepo)
 	modelService := service.NewModelService(modelRepo, providerRepo)
 	healthCheckService := service.NewHealthCheckService(providerRepo, modelRepo, requestLogRepo)
+	blacklistService := service.NewBlacklistService(redisPool)
+	rateLimitService := service.NewRateLimitService(redisPool)
 
 	routingStrategies := []strategy.RoutingStrategy{
 		strategy.NewAutoRoutingStrategy(),
@@ -85,9 +90,10 @@ func main() {
 	providerController := controller.NewProviderController(providerService)
 	modelController := controller.NewModelController(modelService)
 	chatController := controller.NewChatController(chatService, apiKeyService)
-	internalChatController := controller.NewInternalChatController(chatService, apiKeyService, userService)
+	internalChatController := controller.NewInternalChatController(chatService, userService)
 	statsController := controller.NewStatsController(requestLogService, userService)
 	healthCheckTask := task.NewHealthCheckTask(healthCheckService)
+	blacklistController := controller.NewBlacklistController(blacklistService)
 
 	// 4. 构建路由并启动服务
 	engine, err := router.New(
@@ -101,6 +107,9 @@ func main() {
 		userService,
 		providerController,
 		modelController,
+		blacklistController,
+		blacklistService,
+		rateLimitService,
 	)
 	if err != nil {
 		log.Fatalf("build router failed: %v", err)

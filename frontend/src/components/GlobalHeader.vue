@@ -143,6 +143,12 @@ const originItems = [
     label: '插件管理',
     title: '插件管理',
   },
+  {
+    key: '/admin/blacklistManage',
+    icon: () => h(StopOutlined),
+    label: '黑名单管理',
+    title: '黑名单管理',
+  },
 ]
 
 // 过滤菜单项

@@ -50,7 +50,7 @@ func (c *ChatController) ChatCompletions(ctx *gin.Context) {
 
     // 判断是否为流式请求
     if request.Stream != nil && *request.Stream {
-        c.stream(ctx, request, apiKey.UserID, apiKey.ID)
+        c.stream(ctx, request, apiKey.UserID, apiKey.ID, clientIP, userAgent)
         return
     }
     response, err := c.chatService.Chat(request, apiKey.UserID, apiKey.ID, clientIP,userAgent)
@@ -61,8 +61,8 @@ func (c *ChatController) ChatCompletions(ctx *gin.Context) {
     ctx.JSON(http.StatusOK, response)
 }
 
-func (c *ChatController) stream(ctx *gin.Context, request dto.ChatRequest, userID, apiKeyID int64) {
-    streamChan, errChan := c.chatService.ChatStream(request, userID, apiKeyID)
+func (c *ChatController) stream(ctx *gin.Context, request dto.ChatRequest, userID, apiKeyID int64, clientIP, userAgent string) {
+    streamChan, errChan := c.chatService.ChatStream(request, userID, apiKeyID, clientIP, userAgent)
     
     // 设置 SSE 响应头
     ctx.Header("Content-Type", "text/event-stream")

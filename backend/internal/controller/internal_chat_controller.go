@@ -17,7 +17,7 @@ type InternalChatController struct {
 	userService *service.UserService
 }
 
-func NewInternalChatController(chatService *service.ChatService, apiKeyService *service.ApiKeyService, userService *service.UserService) *InternalChatController {
+func NewInternalChatController(chatService *service.ChatService, userService *service.UserService) *InternalChatController {
 	return &InternalChatController{
 		chatService: chatService,
 		userService: userService,
@@ -60,7 +60,7 @@ func (c *InternalChatController) ChatCompletions(ctx *gin.Context) {
 
 
 func (c *InternalChatController) stream(ctx *gin.Context, request dto.ChatRequest, userID, apiKeyID int64, clientIP, userAgent string) {
-	streamChan, errChan := c.chatService.ChatStream(request, userID, apiKeyID)
+	streamChan, errChan := c.chatService.ChatStream(request, userID, apiKeyID, clientIP, userAgent)
 	ctx.Header("Content-Type", "text/event-stream")
 	ctx.Header("Cache-Control", "no-cache")
 	ctx.Header("Connection", "keep-alive")
